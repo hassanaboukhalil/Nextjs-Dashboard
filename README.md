@@ -134,4 +134,38 @@ This approach ensures fonts are properly optimized for performance with:
 - Automatic self-hosting
 - No additional network requests
 
+## Images
+
+This project uses the Next.js Image component (`next/image`) for optimized image loading. The Image component automatically handles:
+
+- Lazy loading
+- Image optimization
+- Responsive sizing
+- Preventing layout shift
+
+**Example from page.tsx:**
+
+```tsx
+import Image from "next/image";
+
+// ...inside component
+<Image
+  src="/hero-desktop.png"
+  width={1000}
+  height={760}
+  className="hidden md:block"
+  alt="Screenshots of the dashboard project showing desktop version"
+/>
+
+<Image
+  src="/hero-mobile.png"
+  width={560}
+  height={620}
+  className="md:hidden"
+  alt="Screenshots of the dashboard project showing desktop version"
+/>
+```
+
+**Important Note:** The `width` and `height` props are not the rendered size of the image, but rather the original dimensions of the image file. Next.js uses these values to calculate the correct aspect ratio and prevent layout shift during loading.
+
 For more information, see the [course curriculum](https://nextjs.org/learn) on the Next.js Website.
