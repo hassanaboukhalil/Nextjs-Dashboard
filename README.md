@@ -10,6 +10,12 @@ npx create-next-app@latest . --example "https://github.com/vercel/next-learn/tre
 
 ## Development
 
+Install pnpm globally (if not already installed):
+
+```
+npm install -g pnpm
+```
+
 Install dependencies:
 
 ```
