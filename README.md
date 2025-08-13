@@ -225,5 +225,6 @@ Note: If you choose to manage schema via Prisma migrations, run your usual Prism
 Additional resource:
 
 - How to use Prisma ORM with Next.js: [Prisma Next.js guide](https://www.prisma.io/docs/guides/nextjs)
+- Postgres.js used in seeding: [porsager/postgres](https://github.com/porsager/postgres) — if you want to interact with the database using raw SQL in Node, this lightweight client is a great choice.
 
 For more information, see the [course curriculum](https://nextjs.org/learn) on the Next.js Website.
