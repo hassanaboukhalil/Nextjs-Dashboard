@@ -200,4 +200,30 @@ const pathname = usePathname();
 </Link>;
 ```
 
+## Database
+
+- Used Vercel Postgres (via Vercel Storage) with Prisma Postgres. In Vercel, open the project → Storage → Create a new database (Prisma + Postgres) → Connect to copy the connection string.
+- Add the connection string to your local environment as `POSTGRES_URL` (e.g., in `.env.local`). The app reads it in the seed route.
+
+Connection usage in the seed route (`app/seed/route.ts`):
+
+```tsx
+const sql = postgres(process.env.POSTGRES_URL!, { ssl: "require" });
+```
+
+### Seeding
+
+- Start the dev server and hit the seed endpoint to populate tables (`users`, `customers`, `invoices`, `revenue`). The route also enables the `uuid-ossp` extension and hashes user passwords with `bcrypt`.
+
+```bash
+pnpm dev
+curl http://localhost:3000/seed
+```
+
+Note: If you choose to manage schema via Prisma migrations, run your usual Prisma commands (e.g., `prisma generate`, `prisma migrate`) before seeding. (Mentioned for completeness.)
+
+Additional resource:
+
+- How to use Prisma ORM with Next.js: [Prisma Next.js guide](https://www.prisma.io/docs/guides/nextjs)
+
 For more information, see the [course curriculum](https://nextjs.org/learn) on the Next.js Website.
