@@ -168,4 +168,36 @@ import Image from "next/image";
 
 **Important Note:** The `width` and `height` props are not the rendered size of the image, but rather the original dimensions of the image file. Next.js uses these values to calculate the correct aspect ratio and prevent layout shift during loading.
 
+## Routing and Navigation
+
+Using `Link` from Next.js is preferred over a plain `<a>` tag because it enables client-side navigation, prefetching, and preserves application state without full page reloads.
+
+**Example using Link (from `app/ui/dashboard/nav-links.tsx`):**
+
+```tsx
+import Link from "next/link";
+
+<Link href="/dashboard" className="...">
+  Dashboard
+</Link>;
+```
+
+The `usePathname` hook from `next/navigation` is used to get the current URL path, which can be used to highlight the active link in the sidebar.
+
+```tsx
+import { usePathname } from "next/navigation";
+import clsx from "clsx";
+
+const pathname = usePathname();
+
+<Link
+  href={link.href}
+  className={clsx("...", {
+    "bg-sky-100 text-blue-600": pathname === link.href,
+  })}
+>
+  {link.name}
+</Link>;
+```
+
 For more information, see the [course curriculum](https://nextjs.org/learn) on the Next.js Website.
