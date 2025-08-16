@@ -1,6 +1,32 @@
-## Next.js App Router Course - Starter
+# Next.js App Router Course - Starter
 
 This is the starter template for the Next.js App Router Course. It contains the starting code for the dashboard application.
+
+## Table of Contents
+
+- [Development](#development)
+- [Styling](#styling)
+  - [Tailwind CSS](#tailwind-css)
+  - [CSS Modules](#css-modules)
+  - [clsx Library](#clsx-library)
+- [Fonts](#fonts)
+- [Images](#images)
+- [Routing and Navigation](#routing-and-navigation)
+- [Database](#database)
+  - [Seeding](#seeding)
+- [Static vs. Dynamic Rendering](#static-vs-dynamic-rendering)
+  - [Static Rendering](#static-rendering)
+  - [Dynamic Rendering](#dynamic-rendering)
+- [Streaming with React Suspense](#streaming-with-react-suspense)
+  - [Benefits of Streaming](#benefits-of-streaming)
+- [Special Files in Next.js App Router](#special-files-in-nextjs-app-router)
+  - [page.tsx](#pagetsx)
+  - [layout.tsx](#layouttsx)
+  - [loading.tsx](#loadingtsx)
+  - [error.tsx](#errortsx)
+  - [not-found.tsx](#not-foundtsx)
+  - [route.ts (API Routes)](#routets-api-routes)
+  - [Route Groups](#route-groups)
 
 This project was initialized using pnpm with the following command:
 
@@ -226,5 +252,192 @@ Additional resource:
 
 - How to use Prisma ORM with Next.js: [Prisma Next.js guide](https://www.prisma.io/docs/guides/nextjs)
 - Postgres.js used in seeding: [porsager/postgres](https://github.com/porsager/postgres) — if you want to interact with the database using raw SQL in Node, this lightweight client is a great choice.
+
+## Static vs. Dynamic Rendering
+
+Next.js supports both static and dynamic rendering approaches, which are used in this dashboard application:
+
+### Static Rendering
+
+Static rendering generates HTML at build time and reuses it for each request. This improves performance as pages can be cached and served from a CDN.
+
+Benefits:
+
+- Faster page loads - content is cached and globally distributed
+- Reduced server load - pages don't need to be rendered for each request
+- Better SEO - content is immediately available for search engine crawlers
+
+Use for:
+
+- Marketing pages, blog posts, or product pages that don't require personalization
+
+### Dynamic Rendering
+
+Dynamic rendering generates HTML on the server for each request. This is useful for personalized or frequently updated content.
+
+In this project, dynamic rendering is used in dashboard components that fetch real-time data:
+
+```tsx
+// Example from app/ui/dashboard/cards.tsx
+export default async function CardWrapper() {
+  const {
+    numberOfInvoices,
+    numberOfCustomers,
+    totalPaidInvoices,
+    totalPendingInvoices,
+  } = await fetchCardData();
+
+  // Component renders with fresh data for each request
+  return (
+    <>
+      <Card title="Collected" value={totalPaidInvoices} type="collected" />
+      <Card title="Pending" value={totalPendingInvoices} type="pending" />
+      {/* ... */}
+    </>
+  );
+}
+```
+
+Benefits:
+
+- Real-time data - always shows the latest information
+- User-specific content - can display personalized information
+- Request-time information - access to request-specific data like cookies or URL params
+
+## Streaming with React Suspense
+
+Next.js supports streaming with React Suspense, which allows you to progressively render UI components as data becomes available, rather than waiting for all data to load before showing anything to the user.
+
+The dashboard uses Suspense boundaries to break down the page into smaller chunks that can be streamed as they become ready:
+
+```tsx
+// Example from app/dashboard/(overview)/page.tsx
+export default async function Page() {
+  return (
+    <main>
+      <h1 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
+        Dashboard
+      </h1>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Suspense fallback={<CardsSkeleton />}>
+          <CardWrapper />
+        </Suspense>
+      </div>
+      <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-8">
+        <Suspense fallback={<RevenueChartSkeleton />}>
+          <RevenueChart />
+        </Suspense>
+        <Suspense fallback={<LatestInvoicesSkeleton />}>
+          <LatestInvoices />
+        </Suspense>
+      </div>
+    </main>
+  );
+}
+```
+
+### Benefits of Streaming
+
+- **Improved perceived performance**: Users see parts of the UI sooner, making the application feel faster
+- **Reduced blocking time**: The page doesn't wait for all data fetches to complete
+- **Automatic loading states**: Each Suspense boundary can show a fallback while content loads
+- **Prioritized content**: Critical UI can be shown first while less important parts load in the background
+
+Streaming is particularly useful for data-heavy dashboard pages where different components may have varying data fetch times.
+
+## Special Files in Next.js App Router
+
+Next.js uses a file-based routing system with special files that have reserved names and specific functions:
+
+### `page.tsx`
+
+The primary file for creating UI for a route. Any directory inside the `app` folder that includes a `page.tsx` file becomes a publicly accessible route.
+
+```tsx
+// app/dashboard/page.tsx
+export default function DashboardPage() {
+  return <div>Dashboard Content</div>;
+}
+```
+
+### `layout.tsx`
+
+Defines a shared UI for a segment and its children. Layouts are preserved during navigation and maintain state.
+
+```tsx
+// app/dashboard/layout.tsx
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="dashboard-layout">
+      <nav>Dashboard Navigation</nav>
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+### `loading.tsx`
+
+Automatically creates a loading UI that's shown while page content is loading. Works seamlessly with React Suspense.
+
+```tsx
+// app/dashboard/(overview)/loading.tsx
+import DashboardSkeleton from "@/app/ui/skeletons";
+
+export default function Loading() {
+  return <DashboardSkeleton />;
+}
+```
+
+### `error.tsx`
+
+Creates an error UI boundary for a route segment. If an error occurs in the segment, this component is shown while preserving the rest of the application.
+
+```tsx
+"use client"; // Error components must be client components
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  return (
+    <div className="error-container">
+      <h2>Something went wrong!</h2>
+      <button onClick={() => reset()}>Try again</button>
+    </div>
+  );
+}
+```
+
+### `not-found.tsx`
+
+Displayed when the `notFound()` function is thrown or when a route can't be matched.
+
+### `route.ts` (API Routes)
+
+Creates server-side API endpoints. In this project, `app/seed/route.ts` is used to seed the database.
+
+```tsx
+// app/seed/route.ts (simplified example)
+export async function GET() {
+  try {
+    // Seed database logic here
+    return Response.json({ message: "Database seeded successfully" });
+  } catch (error) {
+    return Response.json({ error }, { status: 500 });
+  }
+}
+```
+
+### Route Groups
+
+Folders wrapped in parentheses like `(overview)` in `app/dashboard/(overview)/page.tsx` are route groups. They're used for organizational purposes and don't affect the URL structure.
 
 For more information, see the [course curriculum](https://nextjs.org/learn) on the Next.js Website.
