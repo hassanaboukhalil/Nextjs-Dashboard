@@ -9,6 +9,7 @@ import {
 } from "@/app/lib/data";
 
 export default async function Page() {
+  // waterfall approach to fetch data one after the other
   const revenue = await fetchRevenue();
   const latestInvoices = await fetchLatestInvoices();
 
