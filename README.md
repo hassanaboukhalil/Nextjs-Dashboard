@@ -19,6 +19,9 @@ This is the starter template for the Next.js App Router Course. It contains the 
   - [Dynamic Rendering](#dynamic-rendering)
 - [Streaming with React Suspense](#streaming-with-react-suspense)
   - [Benefits of Streaming](#benefits-of-streaming)
+- [Partial Prerendering (Experimental)](#partial-prerendering-experimental)
+  - [How Partial Prerendering Works](#how-partial-prerendering-works)
+  - [Implementing PPR](#implementing-ppr)
 - [Special Files in Next.js App Router](#special-files-in-nextjs-app-router)
   - [page.tsx](#pagetsx)
   - [layout.tsx](#layouttsx)
@@ -344,6 +347,103 @@ export default async function Page() {
 - **Prioritized content**: Critical UI can be shown first while less important parts load in the background
 
 Streaming is particularly useful for data-heavy dashboard pages where different components may have varying data fetch times.
+
+## Partial Prerendering (Experimental)
+
+⚠️ **Experimental Feature Warning**: Partial Prerendering is an experimental feature introduced in Next.js 14. **It is NOT recommended for production use** and is only available with Next.js canary releases (`next@canary`). The feature may change significantly as it progresses toward stability.
+
+Partial Prerendering (PPR) is a new rendering model that allows you to combine the benefits of static and dynamic rendering in the same route. Instead of choosing between static or dynamic rendering for an entire route, PPR lets you have both within a single page.
+
+### The Problem PPR Solves
+
+Most routes are not fully static or dynamic. For example, in an e-commerce site:
+
+- Product information can be static (doesn't change often)
+- User cart and recommendations should be dynamic (personalized content)
+
+Traditionally, if any part of a route uses dynamic functions (like database queries), the entire route becomes dynamic, losing the performance benefits of static content.
+
+### How Partial Prerendering Works
+
+PPR uses React Suspense to defer rendering parts of your application until certain conditions are met:
+
+1. **Static shell**: The static parts of your route are prerendered at build time, creating a fast-loading shell
+2. **Dynamic holes**: Areas wrapped in Suspense boundaries are left as "holes" in the static shell
+3. **Async streaming**: Dynamic content is streamed in parallel when the user requests the route
+
+```tsx
+// Example: Dashboard with mixed static/dynamic content
+export default async function DashboardPage() {
+  return (
+    <main>
+      {/* Static content - prerendered */}
+      <h1>Dashboard</h1>
+      <nav>Static Navigation</nav>
+
+      {/* Dynamic content - streamed on request */}
+      <Suspense fallback={<CardsSkeleton />}>
+        <CardWrapper /> {/* Fetches real-time data */}
+      </Suspense>
+
+      <Suspense fallback={<ChartSkeleton />}>
+        <RevenueChart /> {/* Fetches dynamic chart data */}
+      </Suspense>
+    </main>
+  );
+}
+```
+
+### Implementing PPR
+
+To enable PPR in your Next.js application:
+
+1. **Install Next.js canary**:
+
+```bash
+pnpm install next@canary
+```
+
+2. **Enable PPR in next.config.ts**:
+
+```tsx
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  experimental: {
+    ppr: "incremental",
+  },
+};
+
+export default nextConfig;
+```
+
+3. **Add PPR to specific routes**:
+
+```tsx
+// app/dashboard/layout.tsx
+export const experimental_ppr = true;
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <div>{children}</div>;
+}
+```
+
+### Benefits of PPR
+
+- **Best of both worlds**: Static performance for cacheable content + dynamic personalization
+- **Improved Core Web Vitals**: Faster initial page loads with static shell
+- **Reduced complexity**: No need to restructure existing code using Suspense
+- **Progressive enhancement**: Dynamic content loads progressively without blocking static content
+
+### Current Limitations
+
+- **Experimental status**: Subject to breaking changes
+- **Canary only**: Not available in stable Next.js releases
+- **Production warning**: Not recommended for production applications yet
 
 ## Special Files in Next.js App Router
 
