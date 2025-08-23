@@ -22,6 +22,12 @@ This is the starter template for the Next.js App Router Course. It contains the 
 - [Partial Prerendering (Experimental)](#partial-prerendering-experimental)
   - [How Partial Prerendering Works](#how-partial-prerendering-works)
   - [Implementing PPR](#implementing-ppr)
+- [Adding Search and Pagination](#adding-search-and-pagination)
+  - [URL Search Params Benefits](#url-search-params-benefits)
+  - [Next.js Client Hooks](#nextjs-client-hooks)
+  - [Search Implementation](#search-implementation)
+  - [Debouncing for Performance](#debouncing-for-performance)
+  - [Pagination Implementation](#pagination-implementation)
 - [Special Files in Next.js App Router](#special-files-in-nextjs-app-router)
   - [page.tsx](#pagetsx)
   - [layout.tsx](#layouttsx)
@@ -444,6 +450,191 @@ export default function DashboardLayout({
 - **Experimental status**: Subject to breaking changes
 - **Canary only**: Not available in stable Next.js releases
 - **Production warning**: Not recommended for production applications yet
+
+## Adding Search and Pagination
+
+This project implements search and pagination functionality using URL search parameters, demonstrating how to handle user interactions that span both client and server components.
+
+### URL Search Params Benefits
+
+Instead of managing search state with client-side state, this project uses URL search parameters which provide several advantages:
+
+- **Bookmarkable and shareable URLs**: Users can bookmark or share URLs that include their search queries and current page
+- **Server-side rendering**: URL parameters can be consumed directly on the server for initial rendering
+- **Analytics and tracking**: Search behavior is easier to track without additional client-side logic
+
+### Next.js Client Hooks
+
+The search and pagination functionality uses three key Next.js hooks:
+
+- **`useSearchParams`**: Access current URL parameters (e.g., `?page=1&query=pending`)
+- **`usePathname`**: Read the current URL pathname (e.g., `/dashboard/invoices`)
+- **`useRouter`**: Navigate between routes programmatically on the client
+
+### Search Implementation
+
+The search functionality follows these steps:
+
+1. **Capture user input** in the search component
+2. **Update URL** with search parameters
+3. **Sync input field** with URL state
+4. **Re-render table** with filtered results
+
+```tsx
+// Example from app/ui/search.tsx
+"use client";
+
+import { useSearchParams, usePathname, useRouter } from "next/navigation";
+
+export default function Search({ placeholder }: { placeholder: string }) {
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const { replace } = useRouter();
+
+  function handleSearch(term: string) {
+    const params = new URLSearchParams(searchParams);
+
+    if (term) {
+      params.set("query", term);
+    } else {
+      params.delete("query");
+    }
+
+    // Update URL with new search params
+    replace(`${pathname}?${params.toString()}`);
+  }
+
+  return (
+    <input
+      placeholder={placeholder}
+      onChange={(e) => handleSearch(e.target.value)}
+    />
+  );
+}
+```
+
+### Debouncing for Performance
+
+To optimize database queries, the search implements debouncing using the `use-debounce` library:
+
+```tsx
+import { useDebouncedCallback } from "use-debounce";
+
+const handleSearch = useDebouncedCallback((term) => {
+  const params = new URLSearchParams(searchParams);
+  params.set("page", "1"); // Reset to first page on new search
+
+  if (term) {
+    params.set("query", term);
+  } else {
+    params.delete("query");
+  }
+
+  replace(`${pathname}?${params.toString()}`);
+}, 300); // Wait 300ms after user stops typing
+```
+
+This reduces the number of requests sent to the database by waiting until the user has stopped typing.
+
+### Pagination Implementation
+
+Pagination works by:
+
+1. **Fetching total pages** on the server based on search query
+2. **Creating page URLs** that preserve search state
+3. **Resetting to page 1** when search query changes
+
+```tsx
+// Server component fetches data
+export default async function Page(props: {
+  searchParams?: Promise<{ query?: string; page?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const query = searchParams?.query || "";
+  const currentPage = Number(searchParams?.page) || 1;
+
+  const totalPages = await fetchInvoicesPages(query);
+
+  return (
+    <div>
+      <Search placeholder="Search invoices..." />
+      <Suspense fallback={<InvoicesTableSkeleton />}>
+        <Table query={query} currentPage={currentPage} />
+      </Suspense>
+      <Pagination totalPages={totalPages} />
+    </div>
+  );
+}
+```
+
+The pagination component creates URLs that maintain the current search state:
+
+```tsx
+// Client component handles navigation
+const createPageURL = (pageNumber: number | string) => {
+  const params = new URLSearchParams(searchParams);
+  params.set("page", pageNumber.toString());
+  return `${pathname}?${params.toString()}`;
+};
+```
+
+This approach ensures that search and pagination work together seamlessly, with all state managed through URL parameters rather than client-side state.
+
+### When to use useSearchParams() vs. searchParams prop
+
+You might have noticed two different ways to extract search params in this implementation. Whether you use one or the other depends on whether you're working on the client or the server:
+
+**Client Components - use `useSearchParams()` hook:**
+
+- `<Search>` is a Client Component, so it uses the `useSearchParams()` hook to access params from the client
+- This avoids having to go back to the server to read parameters
+
+**Server Components - use `searchParams` prop:**
+
+- `<Table>` is a Server Component that fetches its own data, so it receives the `searchParams` prop from the page
+- Server Components can directly access props passed from parent components
+
+```tsx
+// Client Component - uses hook
+"use client";
+import { useSearchParams } from "next/navigation";
+
+export default function Search() {
+  const searchParams = useSearchParams(); // ✅ Client hook
+  // ...
+}
+
+// Server Component - uses prop
+export default async function Table({
+  query,
+  currentPage,
+}: {
+  query: string;
+  currentPage: number;
+}) {
+  // Data fetching happens on server
+  const invoices = await fetchFilteredInvoices(query, currentPage);
+  // ...
+}
+
+// Page Component - passes props to server components
+export default async function Page(props: {
+  searchParams?: Promise<{ query?: string; page?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const query = searchParams?.query || "";
+  const currentPage = Number(searchParams?.page) || 1;
+
+  return (
+    <div>
+      <Search placeholder="Search invoices..." /> {/* Client Component */}
+      <Table query={query} currentPage={currentPage} /> {/* Server Component */}
+    </div>
+  );
+}
+```
+
+**General Rule:** If you want to read params from the client, use the `useSearchParams()` hook as this avoids having to go back to the server. For server components that need search parameters, pass them as props from the parent page component.
 
 ## Special Files in Next.js App Router
 
