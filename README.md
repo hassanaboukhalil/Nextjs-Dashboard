@@ -515,7 +515,15 @@ export default function Search({ placeholder }: { placeholder: string }) {
 
 ### Debouncing for Performance
 
-To optimize database queries, the search implements debouncing using the `use-debounce` library:
+To optimize database queries, the search implements debouncing using the `use-debounce` library.
+
+First, install the debounce library:
+
+```bash
+npm i use-debounce
+```
+
+Then implement debouncing in the search component:
 
 ```tsx
 import { useDebouncedCallback } from "use-debounce";
