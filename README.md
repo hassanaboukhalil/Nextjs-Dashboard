@@ -35,6 +35,10 @@ This is the starter template for the Next.js App Router Course. It contains the 
   - [Data Validation with Zod](#data-validation-with-zod)
   - [Dynamic Route Segments](#dynamic-route-segments)
   - [Updating and Deleting Data](#updating-and-deleting-data)
+- [Handling Errors](#handling-errors)
+  - [Try/Catch in Server Actions](#trycatch-in-server-actions)
+  - [Error Boundaries with error.tsx](#error-boundaries-with-errortsx)
+  - [404 Errors with notFound](#404-errors-with-notfound)
 - [Special Files in Next.js App Router](#special-files-in-nextjs-app-router)
   - [page.tsx](#pagetsx)
   - [layout.tsx](#layouttsx)
@@ -862,6 +866,150 @@ export async function deleteInvoice(id: string) {
 ```
 
 This approach provides a robust, secure, and user-friendly way to handle data mutations in Next.js applications.
+
+## Handling Errors
+
+Proper error handling is crucial for creating robust applications. This project demonstrates how to handle errors gracefully using JavaScript's try/catch statements and Next.js error handling APIs.
+
+### Try/Catch in Server Actions
+
+The first line of defense against errors is implementing try/catch blocks in Server Actions to handle expected errors gracefully:
+
+```tsx
+// app/lib/actions.ts
+export async function createInvoice(formData: FormData) {
+  const { customerId, amount, status } = CreateInvoice.parse({
+    customerId: formData.get("customerId"),
+    amount: formData.get("amount"),
+    status: formData.get("status"),
+  });
+
+  const amountInCents = amount * 100;
+  const date = new Date().toISOString().split("T")[0];
+
+  try {
+    await sql`
+      INSERT INTO invoices (customer_id, amount, status, date)
+      VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
+    `;
+  } catch (error) {
+    return {
+      message: "Database Error: Failed to Create Invoice.",
+    };
+  }
+
+  revalidatePath("/dashboard/invoices");
+  redirect("/dashboard/invoices");
+}
+```
+
+**Important Note:** `redirect` is called outside the try/catch block because `redirect` works by throwing an error, which would be caught by the catch block. Always call `redirect` after try/catch when `try` is successful.
+
+### Error Boundaries with error.tsx
+
+For uncaught exceptions and unexpected errors, Next.js provides the `error.tsx` file that serves as an error boundary for route segments:
+
+```tsx
+// app/dashboard/invoices/error.tsx
+"use client";
+
+import { useEffect } from "react";
+
+export default function Error({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string };
+  reset: () => void;
+}) {
+  useEffect(() => {
+    // Optionally log the error to an error reporting service
+    console.error(error);
+  }, [error]);
+
+  return (
+    <main className="flex h-full flex-col items-center justify-center">
+      <h2 className="text-center">Something went wrong!</h2>
+      <button
+        className="mt-4 rounded-md bg-blue-500 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-400"
+        onClick={() => reset()}
+      >
+        Try again
+      </button>
+    </main>
+  );
+}
+```
+
+Key characteristics of `error.tsx`:
+
+- **Must be a Client Component** (`"use client"`)
+- **Accepts two props:**
+  - `error`: JavaScript's native Error object instance
+  - `reset`: Function to reset the error boundary and re-render the route segment
+- **Serves as catch-all** for unexpected errors in the route segment and its children
+
+### 404 Errors with notFound
+
+For handling specific cases where resources don't exist, use the `notFound` function instead of generic error handling:
+
+```tsx
+// app/dashboard/invoices/[id]/edit/page.tsx
+import { fetchInvoiceById, fetchCustomers } from "@/app/lib/data";
+import { notFound } from "next/navigation";
+
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const id = params.id;
+
+  const [invoice, customers] = await Promise.all([
+    fetchInvoiceById(id),
+    fetchCustomers(),
+  ]);
+
+  if (!invoice) {
+    notFound(); // Triggers the not-found.tsx file
+  }
+
+  return (
+    <main>
+      <Form invoice={invoice} customers={customers} />
+    </main>
+  );
+}
+```
+
+Create a corresponding `not-found.tsx` file to display a custom 404 page:
+
+```tsx
+// app/dashboard/invoices/[id]/edit/not-found.tsx
+import Link from "next/link";
+import { FaceFrownIcon } from "@heroicons/react/24/outline";
+
+export default function NotFound() {
+  return (
+    <main className="flex h-full flex-col items-center justify-center gap-2">
+      <FaceFrownIcon className="w-10 text-gray-400" />
+      <h2 className="text-xl font-semibold">404 Not Found</h2>
+      <p>Could not find the requested invoice.</p>
+      <Link
+        href="/dashboard/invoices"
+        className="mt-4 rounded-md bg-blue-500 px-4 py-2 text-sm text-white transition-colors hover:bg-blue-400"
+      >
+        Go Back
+      </Link>
+    </main>
+  );
+}
+```
+
+**Error Handling Hierarchy:**
+
+1. `try/catch` in Server Actions - Handle expected database/validation errors
+2. `notFound()` - Handle specific resource not found cases (takes precedence over error.tsx)
+3. `error.tsx` - Catch-all for unexpected errors and exceptions
+
+This layered approach ensures users always see meaningful error messages rather than generic server errors or blank pages.
 
 ## Special Files in Next.js App Router
 
