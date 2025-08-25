@@ -39,11 +39,16 @@ export async function createInvoice(formData: FormData) {
 
   //   console.log(customerId, amountInCents, status);
 
-  await sql`
+  try {
+    await sql`
     INSERT INTO invoices (customer_id, amount, status, date)
     VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
   `;
+  } catch (error) {
+    console.log(error);
+  }
 
+  // we put redirect outside of the try block because redirect works by throwing an error which would be caught by the catch block. To avoid this, you can call redirect after try/catch. redirect would only be reachable if try is successful.
   revalidatePath("/dashboard/invoices"); // Calling revalidatePath to clear the client cache and make a new server request. Revalidate the invoices page to show the new invoice, because the invoices page(or any other page) maybe cached
   redirect("/dashboard/invoices"); // redirect to the invoices page
 }
@@ -57,18 +62,27 @@ export async function updateInvoice(id: string, formData: FormData) {
 
   const amountInCents = amount * 100;
 
-  await sql`
+  try {
+    await sql`
     UPDATE invoices
     SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
     WHERE id = ${id}
   `;
+  } catch (error) {
+    console.log(error);
+  }
 
   revalidatePath("/dashboard/invoices");
   redirect("/dashboard/invoices");
 }
 
 export async function deleteInvoice(id: string) {
-  await sql`DELETE FROM invoices WHERE id = ${id}`;
+  try {
+    await sql`DELETE FROM invoices WHERE id = ${id}`;
+  } catch (error) {
+    console.log(error);
+  }
+
   revalidatePath("/dashboard/invoices");
 
   // Since this action is being called in the /dashboard/invoices path, you don't need to call redirect. Calling revalidatePath will trigger a new server request and re-render the table.
