@@ -28,6 +28,13 @@ This is the starter template for the Next.js App Router Course. It contains the 
   - [Search Implementation](#search-implementation)
   - [Debouncing for Performance](#debouncing-for-performance)
   - [Pagination Implementation](#pagination-implementation)
+  - [When to use useSearchParams() vs. searchParams prop](#when-to-use-usesearchparams-vs-searchparams-prop)
+- [Mutating Data](#mutating-data)
+  - [Server Actions](#server-actions)
+  - [Forms with Server Actions](#forms-with-server-actions)
+  - [Data Validation with Zod](#data-validation-with-zod)
+  - [Dynamic Route Segments](#dynamic-route-segments)
+  - [Updating and Deleting Data](#updating-and-deleting-data)
 - [Special Files in Next.js App Router](#special-files-in-nextjs-app-router)
   - [page.tsx](#pagetsx)
   - [layout.tsx](#layouttsx)
@@ -643,6 +650,218 @@ export default async function Page(props: {
 ```
 
 **General Rule:** If you want to read params from the client, use the `useSearchParams()` hook as this avoids having to go back to the server. For server components that need search parameters, pass them as props from the parent page component.
+
+## Mutating Data
+
+This project demonstrates how to mutate data (create, update, delete) using React Server Actions, providing a modern approach to handling form submissions and data mutations without needing traditional API endpoints.
+
+### Server Actions
+
+Server Actions are React functions that run asynchronously on the server. They eliminate the need to create API endpoints for data mutations and provide built-in security features.
+
+Key benefits:
+
+- **Security**: Encrypted closures, input validation, error message hashing, and host restrictions
+- **Progressive Enhancement**: Forms work even if JavaScript hasn't loaded yet
+- **No API Endpoints**: Direct server-side execution without manual API creation
+- **Integrated Caching**: Built-in support for Next.js cache revalidation
+
+```tsx
+// app/lib/actions.ts
+"use server";
+
+export async function createInvoice(formData: FormData) {
+  // Server-side logic runs here
+  const rawFormData = {
+    customerId: formData.get("customerId"),
+    amount: formData.get("amount"),
+    status: formData.get("status"),
+  };
+
+  // Database operations, validation, etc.
+}
+```
+
+### Forms with Server Actions
+
+Server Actions integrate seamlessly with HTML forms using the `action` attribute:
+
+```tsx
+// Server Component
+import { createInvoice } from "@/app/lib/actions";
+
+export default function CreateInvoicePage() {
+  return (
+    <form action={createInvoice}>
+      <select name="customerId">{/* Customer options */}</select>
+      <input type="number" name="amount" />
+      <input type="radio" name="status" value="pending" />
+      <input type="radio" name="status" value="paid" />
+      <button type="submit">Create Invoice</button>
+    </form>
+  );
+}
+```
+
+The form automatically passes a `FormData` object to the Server Action, containing all form field values.
+
+### Data Validation with Zod
+
+The project uses Zod for runtime type validation and data parsing:
+
+```tsx
+// app/lib/actions.ts
+import { z } from "zod";
+
+const FormSchema = z.object({
+  id: z.string(),
+  customerId: z.string({
+    invalid_type_error: "Please select a customer.",
+  }),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: "Please enter an amount greater than $0." }),
+  status: z.enum(["pending", "paid"], {
+    invalid_type_error: "Please select an invoice status.",
+  }),
+  date: z.string(),
+});
+
+const CreateInvoice = FormSchema.omit({ id: true, date: true });
+
+export async function createInvoice(formData: FormData) {
+  // Validate and parse the form data
+  const { customerId, amount, status } = CreateInvoice.parse({
+    customerId: formData.get("customerId"),
+    amount: formData.get("amount"),
+    status: formData.get("status"),
+  });
+
+  // Convert amount to cents for database storage
+  const amountInCents = amount * 100;
+  const date = new Date().toISOString().split("T")[0];
+
+  // Insert into database
+  await sql`
+    INSERT INTO invoices (customer_id, amount, status, date)
+    VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
+  `;
+
+  // Revalidate cache and redirect
+  revalidatePath("/dashboard/invoices");
+  redirect("/dashboard/invoices");
+}
+```
+
+### Dynamic Route Segments
+
+The project uses dynamic routes for editing specific invoices using the `[id]` folder structure:
+
+```
+/dashboard/invoices/[id]/edit/page.tsx
+```
+
+This creates routes like `/dashboard/invoices/abc123/edit` where `abc123` is the invoice ID.
+
+```tsx
+// app/dashboard/invoices/[id]/edit/page.tsx
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const id = params.id;
+
+  // Fetch specific invoice and customers in parallel
+  const [invoice, customers] = await Promise.all([
+    fetchInvoiceById(id),
+    fetchCustomers(),
+  ]);
+
+  return (
+    <main>
+      <Breadcrumbs
+        breadcrumbs={[
+          { label: "Invoices", href: "/dashboard/invoices" },
+          {
+            label: "Edit Invoice",
+            href: `/dashboard/invoices/${id}/edit`,
+            active: true,
+          },
+        ]}
+      />
+      <Form invoice={invoice} customers={customers} />
+    </main>
+  );
+}
+```
+
+### Updating and Deleting Data
+
+**Updating Data:**
+For updates, you can't pass the ID directly as a function argument. Instead, use JavaScript's `bind()` method:
+
+```tsx
+// app/ui/invoices/edit-form.tsx
+import { updateInvoice } from "@/app/lib/actions";
+
+export default function EditInvoiceForm({ invoice, customers }) {
+  // Bind the invoice ID to the server action
+  const updateInvoiceWithId = updateInvoice.bind(null, invoice.id);
+
+  return <form action={updateInvoiceWithId}>{/* Form fields */}</form>;
+}
+```
+
+```tsx
+// app/lib/actions.ts
+export async function updateInvoice(id: string, formData: FormData) {
+  const { customerId, amount, status } = UpdateInvoice.parse({
+    customerId: formData.get("customerId"),
+    amount: formData.get("amount"),
+    status: formData.get("status"),
+  });
+
+  const amountInCents = amount * 100;
+
+  await sql`
+    UPDATE invoices
+    SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
+    WHERE id = ${id}
+  `;
+
+  revalidatePath("/dashboard/invoices");
+  redirect("/dashboard/invoices");
+}
+```
+
+**Deleting Data:**
+Similar approach for deletion:
+
+```tsx
+// app/ui/invoices/buttons.tsx
+import { deleteInvoice } from "@/app/lib/actions";
+
+export function DeleteInvoice({ id }: { id: string }) {
+  const deleteInvoiceWithId = deleteInvoice.bind(null, id);
+
+  return (
+    <form action={deleteInvoiceWithId}>
+      <button type="submit">
+        <TrashIcon className="w-4" />
+      </button>
+    </form>
+  );
+}
+```
+
+```tsx
+// app/lib/actions.ts
+export async function deleteInvoice(id: string) {
+  await sql`DELETE FROM invoices WHERE id = ${id}`;
+  revalidatePath("/dashboard/invoices");
+  // No redirect needed since we're staying on the same page
+}
+```
+
+This approach provides a robust, secure, and user-friendly way to handle data mutations in Next.js applications.
 
 ## Special Files in Next.js App Router
 
