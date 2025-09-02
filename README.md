@@ -39,6 +39,12 @@ This is the starter template for the Next.js App Router Course. It contains the 
   - [Try/Catch in Server Actions](#trycatch-in-server-actions)
   - [Error Boundaries with error.tsx](#error-boundaries-with-errortsx)
   - [404 Errors with notFound](#404-errors-with-notfound)
+- [Improving Accessibility](#improving-accessibility)
+  - [ESLint Accessibility Plugin](#eslint-accessibility-plugin)
+  - [Form Accessibility Best Practices](#form-accessibility-best-practices)
+  - [Client-Side Form Validation](#client-side-form-validation)
+  - [Server-Side Form Validation](#server-side-form-validation)
+  - [Displaying Validation Errors](#displaying-validation-errors)
 - [Special Files in Next.js App Router](#special-files-in-nextjs-app-router)
   - [page.tsx](#pagetsx)
   - [layout.tsx](#layouttsx)
@@ -1010,6 +1016,211 @@ export default function NotFound() {
 3. `error.tsx` - Catch-all for unexpected errors and exceptions
 
 This layered approach ensures users always see meaningful error messages rather than generic server errors or blank pages.
+
+## Improving Accessibility
+
+Accessibility (often abbreviated as a11y) is a critical aspect of modern web development that ensures applications can be used by everyone, including people with disabilities. This project implements several accessibility best practices to create an inclusive user experience.
+
+### ESLint Accessibility Plugin
+
+Next.js includes the `eslint-plugin-jsx-a11y` plugin in its ESLint configuration to catch accessibility issues during development:
+
+```json
+// package.json
+"scripts": {
+  "build": "next build",
+  "dev": "next dev",
+  "start": "next start",
+  "lint": "next lint"
+}
+```
+
+Running the linter helps identify accessibility issues:
+
+```bash
+pnpm lint
+```
+
+Example of an accessibility issue caught by ESLint:
+
+```
+Warning: Image elements must have an alt prop,
+either with meaningful text, or an empty string for decorative images.
+jsx-a11y/alt-text
+```
+
+This plugin checks for common accessibility issues such as:
+
+- Missing alt text on images
+- Incorrect ARIA attribute usage
+- Improper heading hierarchy
+- Interactive elements without keyboard accessibility
+
+### Form Accessibility Best Practices
+
+The project implements several form accessibility best practices:
+
+1. **Semantic HTML**
+
+   - Using proper form elements (`<input>`, `<select>`, `<label>`) instead of styled `<div>` elements
+   - Allows assistive technologies to understand and navigate the form structure
+
+2. **Proper Labeling**
+
+   ```tsx
+   <label htmlFor="customer" className="mb-2 block text-sm font-medium">
+     Choose customer
+   </label>
+   <select id="customer" name="customerId">
+     {/* Options */}
+   </select>
+   ```
+
+   - Every form control has an associated `<label>` with matching `htmlFor` and `id` attributes
+   - Improves screen reader support and allows clicking labels to focus inputs
+
+3. **Focus Indicators**
+   - Visible focus styles for keyboard navigation
+   - Maintained through custom styling with appropriate contrast
+
+### Client-Side Form Validation
+
+The simplest form of validation leverages built-in browser validation:
+
+```tsx
+<input
+  id="amount"
+  name="amount"
+  type="number"
+  placeholder="Enter USD amount"
+  required
+/>
+```
+
+Adding the `required` attribute triggers browser-native validation that:
+
+- Prevents form submission when required fields are empty
+- Shows browser-native error messages
+- Is recognized by many assistive technologies
+
+### Server-Side Form Validation
+
+For more robust validation, the project uses server-side validation with React's `useActionState` hook and Zod:
+
+1. **Setting up the Form Component**
+
+```tsx
+// app/ui/invoices/create-form.tsx
+"use client";
+
+import { useActionState } from "react";
+import { createInvoice, State } from "@/app/lib/actions";
+
+export default function Form({ customers }) {
+  const initialState: State = { message: null, errors: {} };
+  const [state, formAction] = useActionState(createInvoice, initialState);
+
+  return <form action={formAction}>{/* Form fields */}</form>;
+}
+```
+
+2. **Defining Validation Schema with Zod**
+
+```tsx
+// app/lib/actions.ts
+import { z } from "zod";
+
+const FormSchema = z.object({
+  id: z.string(),
+  customerId: z.string({
+    invalid_type_error: "Please select a customer.",
+  }),
+  amount: z.coerce
+    .number()
+    .gt(0, { message: "Please enter an amount greater than $0." }),
+  status: z.enum(["pending", "paid"], {
+    invalid_type_error: "Please select an invoice status.",
+  }),
+  date: z.string(),
+});
+
+const CreateInvoice = FormSchema.omit({ id: true, date: true });
+```
+
+3. **Implementing Server Action with Validation**
+
+```tsx
+// app/lib/actions.ts
+export type State = {
+  errors?: {
+    customerId?: string[];
+    amount?: string[];
+    status?: string[];
+  };
+  message?: string | null;
+};
+
+export async function createInvoice(prevState: State, formData: FormData) {
+  // Validate form using Zod
+  const validatedFields = CreateInvoice.safeParse({
+    customerId: formData.get("customerId"),
+    amount: formData.get("amount"),
+    status: formData.get("status"),
+  });
+
+  // If validation fails, return errors
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: "Missing Fields. Failed to Create Invoice.",
+    };
+  }
+
+  // Continue with validated data
+  const { customerId, amount, status } = validatedFields.data;
+  // Database operations...
+}
+```
+
+### Displaying Validation Errors
+
+Accessibility-focused error display includes proper ARIA attributes to ensure screen readers announce errors appropriately:
+
+```tsx
+<div className="mb-4">
+  <label htmlFor="customer" className="mb-2 block text-sm font-medium">
+    Choose customer
+  </label>
+  <select
+    id="customer"
+    name="customerId"
+    className="peer block w-full rounded-md border border-gray-200 py-2 pl-10 text-sm outline-2 placeholder:text-gray-500"
+    defaultValue=""
+    aria-describedby="customer-error"
+  >
+    {/* Options */}
+  </select>
+
+  {/* Error message container with accessibility attributes */}
+  <div id="customer-error" aria-live="polite" aria-atomic="true">
+    {state.errors?.customerId &&
+      state.errors.customerId.map((error: string) => (
+        <p className="mt-2 text-sm text-red-500" key={error}>
+          {error}
+        </p>
+      ))}
+  </div>
+</div>
+```
+
+Key accessibility attributes:
+
+- `aria-describedby="customer-error"`: Links the form field to its error message
+- `id="customer-error"`: Provides a unique identifier for the error container
+- `aria-live="polite"`: Ensures screen readers announce errors when they appear
+- `aria-atomic="true"`: Ensures the entire error message is read as a single unit
+
+This comprehensive approach to form validation ensures that all users, regardless of ability, can successfully interact with forms and understand any validation errors that occur.
 
 ## Special Files in Next.js App Router
 
